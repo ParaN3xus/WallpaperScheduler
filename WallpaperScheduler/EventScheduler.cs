@@ -64,6 +64,8 @@ namespace WallpaperScheduler
             schedulerTimer.Stop();
             SolarData data = SunriseSunsetService.GetSolarData(DateTime.Today);
             LoggingHandler.LogMessage("Calculated solar data: {0}", data);
+            long nextDisplayUpdateTicks = long.MaxValue;
+
             for (int i = 0; i < displayEvents.Count; i++)
             {
                 if (displayEvents[i] == null)
@@ -78,13 +80,19 @@ namespace WallpaperScheduler
                 SolarScheduler.CalcNextUpdateTime(data, displayEvents[i], currentTheme);
                 LoggingHandler.LogMessage("Updated display event: {0}", displayEvents[i]);
 
-                if (currentTheme != null)
+                HandleDisplayEvent(displayEvents[i]);
+                if (displayEvents[i].NextUpdateTime.Ticks < nextDisplayUpdateTicks)
                 {
-                    HandleDisplayEvent(displayEvents[i]);
+                    nextDisplayUpdateTicks = displayEvents[i].NextUpdateTime.Ticks;
                 }
             }
 
             nextUpdateTime = SolarScheduler.CalcNextUpdateTime(data);
+            if (nextDisplayUpdateTicks > 0 && nextDisplayUpdateTicks < nextUpdateTime.Value.Ticks)
+            {
+                nextUpdateTime = new DateTime(nextDisplayUpdateTicks);
+            }
+
             StartTimer(nextUpdateTime.Value);
             return true;
         }
@@ -139,13 +147,13 @@ namespace WallpaperScheduler
 
         private void StartTimer(DateTime futureTime)
         {
-            long intervalTicks = futureTime.Ticks - DateTime.Now.Ticks;
+            var intervalTicks = futureTime.Ticks - DateTime.Now.Ticks;
             if (intervalTicks < timerError)
             {
                 intervalTicks = 1;
             }
 
-            TimeSpan interval = new TimeSpan(intervalTicks);
+            var interval = new TimeSpan(intervalTicks);
             schedulerTimer.Interval = interval.TotalMilliseconds;
             schedulerTimer.Start();
             LoggingHandler.LogMessage("Started timer for {0:0.000} sec", interval.TotalSeconds);
@@ -165,6 +173,9 @@ namespace WallpaperScheduler
 
         private void OnBackgroundTimerElapsed(object sender, EventArgs e)
         {
+            LoggingHandler.LogMessage("Timer 2 triggered");
+            LoggingHandler.LogMessage("nextUpdateTime: {0}, Now: {1}", nextUpdateTime, DateTime.Now);
+
             if (nextUpdateTime.HasValue && DateTime.Now >= nextUpdateTime.Value)
             {
                 LoggingHandler.LogMessage("Scheduler event triggered by timer 2");
